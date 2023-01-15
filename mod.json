@@ -1,0 +1,14 @@
+{
+  "Id": "SeaTruckFlexible",
+  "DisplayName": "SeaTruck Flexible",
+  "Author": "repkins",
+  "Version": "1.0.0",
+  "Dependencies": [],
+  "VersionDependencies": {},
+  "LoadBefore": [],
+  "LoadAfter": [],
+  "Enable": true,
+  "Game": "BelowZero",
+  "AssemblyName": "SubnauticaSeaTruckFlexible.dll",
+  "EntryMethod": "SubnauticaSeaTruckFlexible.MainPatcher.Patch"
+}
