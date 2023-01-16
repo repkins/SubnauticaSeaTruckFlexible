@@ -45,45 +45,38 @@ namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
                 yield return null;
             }
 
-            rearSegment.transform.localPosition += Vector3.back * 0.5f;
+            if (segment.isMainCab)
+            {
+                rearSegment.transform.localPosition += Vector3.back * 0.5f;
+            }
             rearSegment.transform.parent = null;
+
+            rearSegment.rb.centerOfMass = Vector3.zero;
+            segment.rb.centerOfMass = Vector3.zero;
 
             if (!segment.gameObject.TryGetComponent<Joint>(out var joint))
             {
                 Logger.Info($"Creating joint");
 
                 joint = segment.gameObject.AddComponent<CharacterJoint>();
-                joint.enableCollision = false;
-                //joint.autoConfigureConnectedAnchor = false;
-                joint.connectedBody = rearSegment.rb;
-                //joint.swing1Limit = new SoftJointLimit()
-                //{
-                //    limit = 30.0f,
-                //    bounciness = 0.0f,
-                //    contactDistance = 0.0f
-                //};
-                //joint.swingAxis = new Vector3(1.0f, 0.0f, 0.0f);
-                //joint.anchor = new Vector3(0.0f, 0.0f, 1.0f);
-                //joint.connectedAnchor = new Vector3(0.0f, 0.0f, 0.0f);
-
-                var segmentColliders = segment.gameObject.GetComponentsInChildren<Collider>();
-                foreach (var collider in segmentColliders)
-                {
-                    collider.enabled = false;
-                    collider.enabled = true;
-                }
-
-                DrawDebugPrimitive(segment.gameObject);
-                DrawDebugPrimitive(rearSegment.gameObject);
-
-                Logger.Debug($"joint = {joint}");
-                Logger.Debug($"joint.connectedBody = {joint.connectedBody}");
-                Logger.Debug($"joint.enableCollision = {joint.enableCollision}");
             }
-            else
+
+            joint.anchor = Vector3.zero;
+            joint.connectedBody = rearSegment.rb;
+
+            var segmentColliders = segment.gameObject.GetComponentsInChildren<Collider>();
+            foreach (var collider in segmentColliders)
             {
-                Logger.Warning($"joint already exits for {segment.gameObject}.");
+                collider.enabled = false;
+                collider.enabled = true;
             }
+
+            DrawDebugPrimitive(segment.gameObject, joint.anchor);
+            //DrawDebugPrimitive(rearSegment.gameObject, joint.connectedAnchor);
+
+            Logger.Debug($"joint = {joint}");
+            Logger.Debug($"joint.connectedBody = {joint.connectedBody}");
+            Logger.Debug($"joint.connectedAnchor = {joint.connectedAnchor}");
 
             yield break;
         }
@@ -120,20 +113,24 @@ namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
 
         private static void DrawDebugPrimitive(GameObject go)
         {
+            DrawDebugPrimitive(go, Vector3.zero);
+        }
+
+        private static void DrawDebugPrimitive(GameObject go, Vector3 localPosition)
+        {
             const string DebugPrimitiveName = "DebugPrimimive";
 
             if (!go.transform.Find(DebugPrimitiveName))
             {
                 var spherePrim = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 spherePrim.name = DebugPrimitiveName;
-                spherePrim.transform.parent = go.transform;
-                spherePrim.transform.localPosition = Vector3.zero;
-                spherePrim.transform.localScale = Vector3.one * 0.5f;
-
                 if (spherePrim.TryGetComponent<Collider>(out var collider))
                 {
                     UnityEngine.Object.Destroy(collider);
                 }
+                spherePrim.transform.parent = go.transform;
+                spherePrim.transform.localPosition = localPosition;
+                spherePrim.transform.localScale = Vector3.one * 0.5f;
             }
         }
     }
