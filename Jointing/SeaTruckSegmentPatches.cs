@@ -2,7 +2,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
 using UnityEngine;
@@ -12,6 +14,8 @@ namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
     [HarmonyPatch(typeof(SeaTruckSegment))]
     static class OnConnectionChangedPatch
     {
+        static BoneWeight[] boneWeights;
+
         [HarmonyPatch(nameof(SeaTruckSegment.OnConnectionChanged))]
         [HarmonyPrefix()]
         static void DestroyJoint(SeaTruckSegment __instance)
@@ -120,18 +124,31 @@ namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
                     bones[1].worldToLocalMatrix * skinnedObject.transform.localToWorldMatrix
                 };
 
-                var boneWeights = new BoneWeight[connectorMesh.vertexCount];
-                for (var i = 0; i < boneWeights.Length; i++)
+                if (boneWeights == null)
                 {
-                    if (i < boneWeights.Length / 2)
+                    var boneWeightsFilePath = Path.Combine("Assets", "boneweights.bytes");
+                    var executingAssemblyPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+
+                    using (var fileStream = new FileStream(Path.Combine(executingAssemblyPath, boneWeightsFilePath), FileMode.Open))
+                    using (var binaryReader = new BinaryReader(fileStream))
                     {
-                        boneWeights[i].boneIndex0 = 0;
-                        boneWeights[i].weight0 = 1f;
-                    }
-                    else
-                    {
-                        boneWeights[i].boneIndex0 = 1;
-                        boneWeights[i].weight0 = 1f;
+                        var vertexCount = binaryReader.ReadInt32();
+                        boneWeights = new BoneWeight[vertexCount];
+
+                        for (var i = 0; i< vertexCount; i++)
+                        {
+                            boneWeights[i].boneIndex0 = binaryReader.ReadInt32();
+                            boneWeights[i].weight0 = binaryReader.ReadSingle();
+
+                            boneWeights[i].boneIndex1 = binaryReader.ReadInt32();
+                            boneWeights[i].weight1 = binaryReader.ReadSingle();
+
+                            boneWeights[i].boneIndex2 = binaryReader.ReadInt32();
+                            boneWeights[i].weight2 = binaryReader.ReadSingle();
+
+                            boneWeights[i].boneIndex3 = binaryReader.ReadInt32();
+                            boneWeights[i].weight3 = binaryReader.ReadSingle();
+                        }
                     }
                 }
 
