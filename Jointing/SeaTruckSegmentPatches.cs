@@ -10,10 +10,11 @@ using UnityEngine;
 namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
 {
     [HarmonyPatch(typeof(SeaTruckSegment))]
-    [HarmonyPatch(nameof(SeaTruckSegment.OnConnectionChanged))]
     static class OnConnectionChangedPatch
     {
-        static void Prefix(SeaTruckSegment __instance)
+        [HarmonyPatch(nameof(SeaTruckSegment.OnConnectionChanged))]
+        [HarmonyPrefix()]
+        static void DestroyJoint(SeaTruckSegment __instance)
         {
             if (!__instance.isRearConnected)
             {
@@ -26,7 +27,9 @@ namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
             }
         }
 
-        static void Postfix(SeaTruckSegment __instance)
+        [HarmonyPatch(nameof(SeaTruckSegment.OnConnectionChanged))]
+        [HarmonyPostfix()]
+        static void AddJoint(SeaTruckSegment __instance)
         {
             var segment = __instance;
 
@@ -71,17 +74,81 @@ namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
                 collider.enabled = true;
             }
 
-            DrawDebugPrimitive(segment.gameObject, joint.anchor);
+            //DrawDebugPrimitive(segment.gameObject, joint.anchor);
             //DrawDebugPrimitive(rearSegment.gameObject, joint.connectedAnchor);
 
             Logger.Debug($"joint = {joint}");
             Logger.Debug($"joint.connectedBody = {joint.connectedBody}");
             Logger.Debug($"joint.connectedAnchor = {joint.connectedAnchor}");
 
+            var openedGo = segment.rearConnection.openedGo;
+
+            // Create skinned mesh
+            if (!openedGo.transform.Find("Skinned Mesh"))
+            {
+                var connectorMeshFilter = openedGo.GetComponentInChildren<MeshFilter>();
+                var connectorMesh = connectorMeshFilter.mesh;
+                Logger.Debug($"Connector mesh {connectorMesh}");
+
+                var skinnedObject = new GameObject("Skinned Mesh");
+                skinnedObject.transform.parent = openedGo.transform;
+                skinnedObject.transform.position = connectorMeshFilter.transform.position;
+                skinnedObject.transform.rotation = connectorMeshFilter.transform.rotation;
+                skinnedObject.transform.localScale = connectorMeshFilter.transform.localScale;
+
+                var skinnedRenderer = skinnedObject.AddComponent<SkinnedMeshRenderer>();
+                skinnedRenderer.materials = openedGo.GetComponentInChildren<MeshRenderer>().materials;
+                skinnedRenderer.localBounds = connectorMesh.bounds;
+
+                var bones = new Transform[2];
+                bones[0] = new GameObject("Lower").transform;
+                bones[0].parent = skinnedObject.transform;
+
+                // Set the position relative to the parent
+                bones[0].localRotation = Quaternion.identity;
+                bones[0].localPosition = new Vector3(0, 0, -2);
+
+                bones[1] = new GameObject("Upper").transform;
+                bones[1].parent = skinnedObject.transform;
+
+                // Set the position relative to the parent
+                bones[1].localRotation = Quaternion.identity;
+                bones[1].localPosition = new Vector3(0f, 0f, -2.6f);
+
+                connectorMesh.bindposes = new[] {
+                    bones[0].worldToLocalMatrix * skinnedObject.transform.localToWorldMatrix,
+                    bones[1].worldToLocalMatrix * skinnedObject.transform.localToWorldMatrix
+                };
+
+                var boneWeights = new BoneWeight[connectorMesh.vertexCount];
+                for (var i = 0; i < boneWeights.Length; i++)
+                {
+                    if (i < boneWeights.Length / 2)
+                    {
+                        boneWeights[i].boneIndex0 = 0;
+                        boneWeights[i].weight0 = 1f;
+                    }
+                    else
+                    {
+                        boneWeights[i].boneIndex0 = 1;
+                        boneWeights[i].weight0 = 1f;
+                    }
+                }
+
+                connectorMesh.boneWeights = boneWeights;
+
+                skinnedRenderer.bones = bones;
+                skinnedRenderer.sharedMesh = connectorMesh;
+
+                UnityEngine.Object.Destroy(connectorMeshFilter.gameObject);
+            }
+
             yield break;
         }
 
-        static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
+        [HarmonyPatch(nameof(SeaTruckSegment.OnConnectionChanged))]
+        [HarmonyTranspiler()]
+        static IEnumerable<CodeInstruction> RemoveRigidbodyDestruction(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
         {
             var codeMatcherCursor = new CodeMatcher(instructions);
 
@@ -111,44 +178,53 @@ namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
             }
         }
 
-        private static void DrawDebugPrimitive(GameObject go)
+        const string DebugPrimitiveName = "DebugPrimitive";
+
+        private static GameObject DrawDebugPrimitive(GameObject go)
         {
-            DrawDebugPrimitive(go, Vector3.zero);
+            return DrawDebugPrimitive(go, Vector3.zero);
         }
 
-        private static void DrawDebugPrimitive(GameObject go, Vector3 localPosition)
+        private static GameObject DrawDebugPrimitive(GameObject go, Vector3 localPosition)
         {
-            const string DebugPrimitiveName = "DebugPrimimive";
-
-            if (!go.transform.Find(DebugPrimitiveName))
+            var spherePrim = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            spherePrim.name = DebugPrimitiveName;
+            if (spherePrim.TryGetComponent<Collider>(out var collider))
             {
-                var spherePrim = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                spherePrim.name = DebugPrimitiveName;
-                if (spherePrim.TryGetComponent<Collider>(out var collider))
+                UnityEngine.Object.Destroy(collider);
+            }
+            spherePrim.transform.parent = go.transform;
+            spherePrim.transform.localPosition = localPosition;
+            spherePrim.transform.localScale = Vector3.one * 0.25f;
+
+            return spherePrim;
+        }
+
+        private static void ClearDebugPrimitives(GameObject go)
+        {
+            foreach (Transform transform in go.transform)
+            {
+                if (transform.gameObject.name == DebugPrimitiveName)
                 {
-                    UnityEngine.Object.Destroy(collider);
+                    UnityEngine.Object.Destroy(transform.gameObject);
                 }
-                spherePrim.transform.parent = go.transform;
-                spherePrim.transform.localPosition = localPosition;
-                spherePrim.transform.localScale = Vector3.one * 0.5f;
             }
         }
-    }
 
-    [HarmonyPatch(typeof(SeaTruckSegment))]
-    [HarmonyPatch(nameof(SeaTruckSegment.Update))]
-    static class UpdatePatches
-    { 
-        static void Prefix(SeaTruckSegment __instance, ref bool __state)
+        [HarmonyPatch(nameof(SeaTruckSegment.Update))]
+        [HarmonyPostfix()]
+        static void DrawPrimDirection(SeaTruckSegment __instance)
         {
-            __state = __instance.updateDockedPosition;
-        }
+            var lines = __instance.rearConnection.openedGo.GetComponentsInChildren<LineRenderer>(true);
 
-        static void Postfix(SeaTruckSegment __instance, ref bool __state)
-        {
-            
-        }
+            lines.Where(l => l.gameObject.name == DebugPrimitiveName).ForEach(line =>
+            {
+                line.positionCount = 2;
 
-        
+                // set the position
+                line.SetPosition(0, line.transform.position);
+                line.SetPosition(1, line.transform.position + line.transform.forward * 1f);
+            });
+        }
     }
 }
