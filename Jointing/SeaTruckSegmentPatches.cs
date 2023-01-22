@@ -87,38 +87,33 @@ namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
 
             var openedGo = segment.rearConnection.openedGo;
 
-            // Create skinned mesh
             if (!openedGo.transform.Find("Skinned Mesh"))
             {
+                // Prepare skinned mesh object
                 var connectorMeshFilter = openedGo.GetComponentInChildren<MeshFilter>();
                 var connectorMesh = connectorMeshFilter.mesh;
                 Logger.Debug($"Connector mesh {connectorMesh}");
 
                 var skinnedObject = new GameObject("Skinned Mesh");
                 skinnedObject.transform.parent = openedGo.transform;
-                skinnedObject.transform.position = connectorMeshFilter.transform.position;
-                skinnedObject.transform.rotation = connectorMeshFilter.transform.rotation;
+                skinnedObject.transform.localPosition = connectorMeshFilter.transform.localPosition;
+                skinnedObject.transform.localRotation = connectorMeshFilter.transform.localRotation;
                 skinnedObject.transform.localScale = connectorMeshFilter.transform.localScale;
 
-                var skinnedRenderer = skinnedObject.AddComponent<SkinnedMeshRenderer>();
-                skinnedRenderer.materials = openedGo.GetComponentInChildren<MeshRenderer>().materials;
-                skinnedRenderer.localBounds = connectorMesh.bounds;
-
+                // Create armature of 2 bones
                 var bones = new Transform[2];
-                bones[0] = new GameObject("Lower").transform;
+
+                bones[0] = new GameObject("Closest").transform;
                 bones[0].parent = skinnedObject.transform;
-
-                // Set the position relative to the parent
                 bones[0].localRotation = Quaternion.identity;
-                bones[0].localPosition = new Vector3(0, 0, -2);
+                bones[0].localPosition = new Vector3(0, 0, -1.992755f);
 
-                bones[1] = new GameObject("Upper").transform;
+                bones[1] = new GameObject("Distant").transform;
                 bones[1].parent = skinnedObject.transform;
-
-                // Set the position relative to the parent
                 bones[1].localRotation = Quaternion.identity;
-                bones[1].localPosition = new Vector3(0f, 0f, -2.6f);
+                bones[1].localPosition = new Vector3(0f, 0f, -2.366901f);
 
+                // Calculate bindposes for bones
                 connectorMesh.bindposes = new[] {
                     bones[0].worldToLocalMatrix * skinnedObject.transform.localToWorldMatrix,
                     bones[1].worldToLocalMatrix * skinnedObject.transform.localToWorldMatrix
@@ -126,38 +121,62 @@ namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
 
                 if (boneWeights == null)
                 {
-                    var boneWeightsFilePath = Path.Combine("Assets", "boneweights.bytes");
+                    // Load bone weights data for mesh
+                    var meshName = connectorMesh.name.Replace(" Instance", string.Empty);
+                    var boneWeightsFilePath = Path.Combine("Assets", "boneweights", $"{meshName}.bytes");
                     var executingAssemblyPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
 
-                    using (var fileStream = new FileStream(Path.Combine(executingAssemblyPath, boneWeightsFilePath), FileMode.Open))
-                    using (var binaryReader = new BinaryReader(fileStream))
+                    if (File.Exists(Path.Combine(executingAssemblyPath, boneWeightsFilePath)))
                     {
-                        var vertexCount = binaryReader.ReadInt32();
-                        boneWeights = new BoneWeight[vertexCount];
-
-                        for (var i = 0; i< vertexCount; i++)
+                        using (var fileStream = new FileStream(Path.Combine(executingAssemblyPath, boneWeightsFilePath), FileMode.Open))
+                        using (var binaryReader = new BinaryReader(fileStream))
                         {
-                            boneWeights[i].boneIndex0 = binaryReader.ReadInt32();
-                            boneWeights[i].weight0 = binaryReader.ReadSingle();
+                            var vertexCount = binaryReader.ReadInt32();
+                            boneWeights = new BoneWeight[vertexCount];
 
-                            boneWeights[i].boneIndex1 = binaryReader.ReadInt32();
-                            boneWeights[i].weight1 = binaryReader.ReadSingle();
+                            for (var i = 0; i < vertexCount; i++)
+                            {
+                                boneWeights[i].boneIndex0 = binaryReader.ReadInt32();
+                                boneWeights[i].weight0 = binaryReader.ReadSingle();
 
-                            boneWeights[i].boneIndex2 = binaryReader.ReadInt32();
-                            boneWeights[i].weight2 = binaryReader.ReadSingle();
+                                boneWeights[i].boneIndex1 = binaryReader.ReadInt32();
+                                boneWeights[i].weight1 = binaryReader.ReadSingle();
 
-                            boneWeights[i].boneIndex3 = binaryReader.ReadInt32();
-                            boneWeights[i].weight3 = binaryReader.ReadSingle();
+                                boneWeights[i].boneIndex2 = binaryReader.ReadInt32();
+                                boneWeights[i].weight2 = binaryReader.ReadSingle();
+
+                                boneWeights[i].boneIndex3 = binaryReader.ReadInt32();
+                                boneWeights[i].weight3 = binaryReader.ReadSingle();
+                            }
                         }
+                    }
+                    else
+                    {
+                        Logger.Warning($"Boneweights for \"{connectorMesh.name}\" mesh does not exist");
                     }
                 }
 
+                // Assign bone weights to mesh
                 connectorMesh.boneWeights = boneWeights;
 
-                skinnedRenderer.bones = bones;
+                // Prepare renderer
+                var skinnedRenderer = skinnedObject.AddComponent<SkinnedMeshRenderer>();
+                skinnedRenderer.materials = openedGo.GetComponentInChildren<MeshRenderer>().materials;
+                skinnedRenderer.localBounds = connectorMesh.bounds;
                 skinnedRenderer.sharedMesh = connectorMesh;
+                skinnedRenderer.bones = bones;
 
+                // Destroy original mesh object
                 UnityEngine.Object.Destroy(connectorMeshFilter.gameObject);
+
+                // Reparent to rear segment
+                bones[0].parent = rearSegment.transform;
+
+                if (segment.isMainCab)
+                {
+                    // Adjust position by specified amount
+                    bones[0].localPosition += Vector3.back * 0.1165f;
+                }
             }
 
             yield break;
