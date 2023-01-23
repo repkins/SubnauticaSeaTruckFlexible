@@ -2,17 +2,19 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
-namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
+namespace SubnauticaSeaTruckFlexible.Jointing
 {
     [HarmonyPatch(typeof(SeaTruckSegment))]
-    static class OnConnectionChangedPatch
+    static class SeaTruckSegmentPatches
     {
         static BoneWeight[] boneWeights;
 
@@ -40,6 +42,8 @@ namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
             if (segment.isRearConnected)
             {
                 segment.StartCoroutine(AddJointAfterDocking(segment));
+
+                segment.rb.isKinematic = true;
             }
         }
 
@@ -77,6 +81,8 @@ namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
                 collider.enabled = false;
                 collider.enabled = true;
             }
+
+            segment.rb.isKinematic = false;
 
             //DrawDebugPrimitive(segment.gameObject, joint.anchor);
             //DrawDebugPrimitive(rearSegment.gameObject, joint.connectedAnchor);
@@ -172,11 +178,85 @@ namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
                 // Reparent to rear segment
                 bones[0].parent = rearSegment.transform;
 
+                // Make mesh colliders from simple quads in place of box colliders
+                foreach (var connectorCollider in openedGo.GetComponentsInChildren<BoxCollider>())
+                {
+                    var localExtents = connectorCollider.size / 2;
+
+                    // Create mesh
+                    var colliderMesh = new Mesh();
+                    if (connectorCollider.transform.localScale.x > connectorCollider.transform.localScale.y)
+                    {
+                        colliderMesh.vertices = new Vector3[] {
+                            connectorCollider.center + new Vector3(-localExtents.x, 0f, -localExtents.z),
+                            connectorCollider.center + new Vector3(-localExtents.x, 0f, localExtents.z),
+                            connectorCollider.center + new Vector3(localExtents.x, 0f, localExtents.z),
+                            connectorCollider.center + new Vector3(localExtents.x, 0f, -localExtents.z)
+                        };
+                    }
+                    else
+                    {
+                        colliderMesh.vertices = new Vector3[] {
+                            connectorCollider.center + new Vector3(0f, -localExtents.y, -localExtents.z),
+                            connectorCollider.center + new Vector3(0f, -localExtents.y, localExtents.z),
+                            connectorCollider.center + new Vector3(0f, localExtents.y, localExtents.z),
+                            connectorCollider.center + new Vector3(0f, localExtents.y, -localExtents.z)
+                        };
+                    }
+                    colliderMesh.triangles = new[] {
+                        0, 1, 2,
+                        2, 3, 0
+                    };
+                    colliderMesh.boneWeights = new[] { 
+                        new BoneWeight()
+                        {
+                            boneIndex0 = 0,
+                            weight0 = 1,
+                        },
+                        new BoneWeight()
+                        {
+                            boneIndex0 = 1,
+                            weight0 = 1,
+                        },
+                        new BoneWeight()
+                        {
+                            boneIndex0 = 1,
+                            weight0 = 1,
+                        },
+                        new BoneWeight()
+                        {
+                            boneIndex0 = 0,
+                            weight0 = 1,
+                        }
+                    };
+                    colliderMesh.bindposes = new[] {
+                        bones[0].worldToLocalMatrix * connectorCollider.gameObject.transform.localToWorldMatrix,
+                        bones[1].worldToLocalMatrix * connectorCollider.gameObject.transform.localToWorldMatrix
+                    };
+
+                    Mesh meshForCollider = new Mesh();
+
+                    var meshCollider = connectorCollider.gameObject.AddComponent<MeshCollider>();
+                    meshCollider.sharedMaterial = connectorCollider.sharedMaterial;
+                    meshCollider.sharedMesh = meshForCollider;
+                    meshCollider.convex = true;
+                    meshCollider.cookingOptions = MeshColliderCookingOptions.None;
+
+                    connectorCollider.enabled = false;
+
+                    var skinnedCollisionRenderer = connectorCollider.gameObject.AddComponent<SkinnedMeshRenderer>();
+                    skinnedCollisionRenderer.sharedMesh = colliderMesh;
+                    skinnedCollisionRenderer.bones = bones;
+                    skinnedCollisionRenderer.enabled = false;
+                }
+
                 if (segment.isMainCab)
                 {
                     // Adjust position by specified amount
                     bones[0].localPosition += Vector3.back * 0.1165f;
                 }
+
+                openedGo.GetComponentsInChildren(meshColliders);
             }
 
             yield break;
@@ -247,20 +327,100 @@ namespace SubnauticaSeaTruckFlexible.Jointing.SeaTruckSegmentPatches
             }
         }
 
-        [HarmonyPatch(nameof(SeaTruckSegment.Update))]
-        [HarmonyPostfix()]
-        static void DrawPrimDirection(SeaTruckSegment __instance)
+        //[HarmonyPatch(nameof(SeaTruckSegment.Update))]
+        //[HarmonyPostfix()]
+        static void DrawConnectorColliderLines(SeaTruckSegment __instance)
         {
-            var lines = __instance.rearConnection.openedGo.GetComponentsInChildren<LineRenderer>(true);
-
-            lines.Where(l => l.gameObject.name == DebugPrimitiveName).ForEach(line =>
+            if (!__instance.isRearConnected)
             {
-                line.positionCount = 2;
+                return;
+            }
 
-                // set the position
-                line.SetPosition(0, line.transform.position);
-                line.SetPosition(1, line.transform.position + line.transform.forward * 1f);
-            });
+            var openedGo = __instance.rearConnection.openedGo;
+            if (!openedGo.GetComponentInChildren<LineRenderer>())
+            {
+                Material material = new Material(Shader.Find("Unlit/Color"));
+                Color color = Color.green;
+                material.color = color;
+                float width = 0.01f;
+
+                foreach (var meshCollider in openedGo.GetComponentsInChildren<MeshCollider>())
+                {
+                    var triVertices = meshCollider.sharedMesh.vertices;
+
+                    for (var i = 0; i < triVertices.Length; i += 3)
+                    {
+                        DrawLine(meshCollider.gameObject, i, color, material, width);
+                        DrawLine(meshCollider.gameObject, i+1, color, material, width);
+                        DrawLine(meshCollider.gameObject, i+2, color, material, width);
+                    }
+                }
+            }
+
+            foreach (var meshCollider in openedGo.GetComponentsInChildren<MeshCollider>())
+            {
+                var triVertexIndices = meshCollider.sharedMesh.triangles;
+                var vertices = meshCollider.sharedMesh.vertices;
+
+                for (var i = 0; i < triVertexIndices.Length; i += 3)
+                {
+                    PositionLine(meshCollider.gameObject, i, vertices[triVertexIndices[i]], vertices[triVertexIndices[i+1]]);
+                    PositionLine(meshCollider.gameObject, i+1, vertices[triVertexIndices[i+1]], vertices[triVertexIndices[i+2]]);
+                    PositionLine(meshCollider.gameObject, i+2, vertices[triVertexIndices[i+2]], vertices[triVertexIndices[i]]);
+                }
+            }
+
+        }
+
+        static void DrawLine(GameObject attachTo, int index, Color color, Material material, float width = 0.01f)
+        {
+            LineRenderer line = new GameObject($"Line_{index}").AddComponent<LineRenderer>();
+            line.material = material;
+            line.startColor = color;
+            line.endColor = color;
+            line.startWidth = width;
+            line.endWidth = width;
+            line.positionCount = 2;
+            line.useWorldSpace = true;
+            line.transform.SetParent(attachTo.transform);
+        }
+
+        static void PositionLine(GameObject attachTo, int index, Vector3 start, Vector3 end)
+        {
+            LineRenderer line = attachTo.transform.Find($"Line_{index}").GetComponent<LineRenderer>();
+
+            line.SetPosition(0, attachTo.transform.TransformPoint(start));
+            line.SetPosition(1, attachTo.transform.TransformPoint(end));
+        }
+
+        public static List<MeshCollider> meshColliders = new List<MeshCollider>();
+    }
+
+    [HarmonyPatch(typeof(SeaTruckMotor))]
+    static class SeaTruckMotorPatches
+    {
+        [HarmonyPatch(nameof(SeaTruckMotor.FixedUpdate))]
+        [HarmonyPostfix()]
+        static void UpdateConnectorCollision(SeaTruckMotor __instance)
+        {
+            foreach (var meshCollider in SeaTruckSegmentPatches.meshColliders)
+            {
+                var colliderMesh = meshCollider.sharedMesh;
+                meshCollider.gameObject.GetComponent<SkinnedMeshRenderer>().BakeMesh(colliderMesh);
+
+                var invScale = new Vector3(1f / meshCollider.transform.localScale.x,
+                                        1f / meshCollider.transform.localScale.y,
+                                        1f / meshCollider.transform.localScale.z);
+
+                var vertices = colliderMesh.vertices;
+                for (var i = 0; i < vertices.Length; i++)
+                {
+                    vertices[i].Scale(invScale);
+                }
+                colliderMesh.vertices = vertices;
+
+                meshCollider.sharedMesh = colliderMesh;
+            }
         }
     }
 }
