@@ -26,9 +26,9 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             {
                 if (__instance.gameObject.TryGetComponent<Joint>(out var joint))
                 {
-                    Logger.Info($"Destroying joint");
+                    Logger.Info($"Separating joint");
 
-                    UnityEngine.Object.Destroy(joint);
+                    joint.connectedBody = null;
                 }
             }
         }
@@ -41,9 +41,9 @@ namespace SubnauticaSeaTruckFlexible.Jointing
 
             if (segment.isRearConnected)
             {
-                segment.StartCoroutine(AddJointAfterDocking(segment));
-
                 segment.rb.isKinematic = true;
+
+                segment.StartCoroutine(AddJointAfterDocking(segment));
             }
         }
 
@@ -51,48 +51,19 @@ namespace SubnauticaSeaTruckFlexible.Jointing
         {
             var rearSegment = segment.rearConnection.connection.truckSegment;
 
-            while (rearSegment.updateDockedPosition)
+            do
             {
                 yield return null;
             }
+            while (rearSegment.updateDockedPosition);
 
             if (segment.isMainCab)
             {
                 rearSegment.transform.localPosition += Vector3.back * 0.3835f;
             }
-            rearSegment.transform.parent = null;
 
-            rearSegment.rb.centerOfMass = Vector3.zero;
-            segment.rb.centerOfMass = Vector3.zero;
-
-            if (!segment.gameObject.TryGetComponent<Joint>(out var joint))
-            {
-                Logger.Info($"Creating joint");
-
-                joint = segment.gameObject.AddComponent<CharacterJoint>();
-            }
-
-            joint.anchor = Vector3.zero;
-            joint.connectedBody = rearSegment.rb;
-
-            var segmentColliders = segment.gameObject.GetComponentsInChildren<Collider>();
-            foreach (var collider in segmentColliders)
-            {
-                collider.enabled = false;
-                collider.enabled = true;
-            }
-
-            segment.rb.isKinematic = false;
-
-            //DrawDebugPrimitive(segment.gameObject, joint.anchor);
-            //DrawDebugPrimitive(rearSegment.gameObject, joint.connectedAnchor);
-
-            Logger.Debug($"joint = {joint}");
-            Logger.Debug($"joint.connectedBody = {joint.connectedBody}");
-            Logger.Debug($"joint.connectedAnchor = {joint.connectedAnchor}");
-
+            // Convert connected mesh to skinned
             var openedGo = segment.rearConnection.openedGo;
-
             if (!openedGo.transform.Find("Skinned Mesh"))
             {
                 // Prepare skinned mesh object
@@ -243,6 +214,43 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                 openedGo.GetComponentsInChildren(meshColliders);
             }
 
+            // Offset rear segment before creating joint
+            rearSegment.transform.localPosition += Vector3.back * 0.25f;
+
+            rearSegment.transform.parent = null;
+
+            rearSegment.rb.centerOfMass = Vector3.zero;
+            segment.rb.centerOfMass = Vector3.zero;
+
+            // Create joint
+            if (!segment.gameObject.TryGetComponent<Joint>(out var joint))
+            {
+                Logger.Info($"Creating joint");
+
+                joint = segment.gameObject.AddComponent<CharacterJoint>();
+
+                joint.anchor = Vector3.zero;
+            }
+
+            Logger.Info($"Connecting joint");
+            joint.connectedBody = rearSegment.rb;
+
+            var segmentColliders = segment.gameObject.GetComponentsInChildren<Collider>();
+            foreach (var collider in segmentColliders)
+            {
+                collider.enabled = false;
+                collider.enabled = true;
+            }
+
+            segment.rb.isKinematic = false;
+
+            //DrawDebugPrimitive(segment.gameObject, joint.anchor);
+            //DrawDebugPrimitive(rearSegment.gameObject, joint.connectedAnchor);
+
+            Logger.Debug($"joint = {joint}");
+            Logger.Debug($"joint.connectedBody = {joint.connectedBody}");
+            Logger.Debug($"joint.connectedAnchor = {joint.connectedAnchor}");
+
             yield break;
         }
 
@@ -276,105 +284,6 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                 // Remove Rigidbody destruction call instructions.
                 codeCursor.RemoveInstructions(3);
             }
-        }
-
-        const string DebugPrimitiveName = "DebugPrimitive";
-
-        private static GameObject DrawDebugPrimitive(GameObject go)
-        {
-            return DrawDebugPrimitive(go, Vector3.zero);
-        }
-
-        private static GameObject DrawDebugPrimitive(GameObject go, Vector3 localPosition)
-        {
-            var spherePrim = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            spherePrim.name = DebugPrimitiveName;
-            if (spherePrim.TryGetComponent<Collider>(out var collider))
-            {
-                UnityEngine.Object.Destroy(collider);
-            }
-            spherePrim.transform.parent = go.transform;
-            spherePrim.transform.localPosition = localPosition;
-            spherePrim.transform.localScale = Vector3.one * 0.25f;
-
-            return spherePrim;
-        }
-
-        private static void ClearDebugPrimitives(GameObject go)
-        {
-            foreach (Transform transform in go.transform)
-            {
-                if (transform.gameObject.name == DebugPrimitiveName)
-                {
-                    UnityEngine.Object.Destroy(transform.gameObject);
-                }
-            }
-        }
-
-        //[HarmonyPatch(nameof(SeaTruckSegment.Update))]
-        //[HarmonyPostfix()]
-        static void DrawConnectorColliderLines(SeaTruckSegment __instance)
-        {
-            if (!__instance.isRearConnected)
-            {
-                return;
-            }
-
-            var openedGo = __instance.rearConnection.openedGo;
-            if (!openedGo.GetComponentInChildren<LineRenderer>())
-            {
-                Material material = new Material(Shader.Find("Unlit/Color"));
-                Color color = Color.green;
-                material.color = color;
-                float width = 0.01f;
-
-                foreach (var meshCollider in openedGo.GetComponentsInChildren<MeshCollider>())
-                {
-                    var triVertices = meshCollider.sharedMesh.vertices;
-
-                    for (var i = 0; i < triVertices.Length; i += 3)
-                    {
-                        DrawLine(meshCollider.gameObject, i, color, material, width);
-                        DrawLine(meshCollider.gameObject, i+1, color, material, width);
-                        DrawLine(meshCollider.gameObject, i+2, color, material, width);
-                    }
-                }
-            }
-
-            foreach (var meshCollider in openedGo.GetComponentsInChildren<MeshCollider>())
-            {
-                var triVertexIndices = meshCollider.sharedMesh.triangles;
-                var vertices = meshCollider.sharedMesh.vertices;
-
-                for (var i = 0; i < triVertexIndices.Length; i += 3)
-                {
-                    PositionLine(meshCollider.gameObject, i, vertices[triVertexIndices[i]], vertices[triVertexIndices[i+1]]);
-                    PositionLine(meshCollider.gameObject, i+1, vertices[triVertexIndices[i+1]], vertices[triVertexIndices[i+2]]);
-                    PositionLine(meshCollider.gameObject, i+2, vertices[triVertexIndices[i+2]], vertices[triVertexIndices[i]]);
-                }
-            }
-
-        }
-
-        static void DrawLine(GameObject attachTo, int index, Color color, Material material, float width = 0.01f)
-        {
-            LineRenderer line = new GameObject($"Line_{index}").AddComponent<LineRenderer>();
-            line.material = material;
-            line.startColor = color;
-            line.endColor = color;
-            line.startWidth = width;
-            line.endWidth = width;
-            line.positionCount = 2;
-            line.useWorldSpace = true;
-            line.transform.SetParent(attachTo.transform);
-        }
-
-        static void PositionLine(GameObject attachTo, int index, Vector3 start, Vector3 end)
-        {
-            LineRenderer line = attachTo.transform.Find($"Line_{index}").GetComponent<LineRenderer>();
-
-            line.SetPosition(0, attachTo.transform.TransformPoint(start));
-            line.SetPosition(1, attachTo.transform.TransformPoint(end));
         }
 
         public static List<MeshCollider> meshColliders = new List<MeshCollider>();
