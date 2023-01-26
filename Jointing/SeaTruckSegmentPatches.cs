@@ -58,7 +58,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
 
             if (segment.isMainCab)
             {
-                rearSegment.transform.localPosition += Vector3.back * 0.5f;
+                rearSegment.transform.localPosition += Vector3.back * 0.3835f;
             }
             rearSegment.transform.parent = null;
 
@@ -106,18 +106,11 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                 skinnedObject.transform.localRotation = connectorMeshFilter.transform.localRotation;
                 skinnedObject.transform.localScale = connectorMeshFilter.transform.localScale;
 
-                // Create armature of 2 bones
+                // Assign connecting segments as 2 bones
                 var bones = new Transform[2];
 
-                bones[0] = new GameObject("Closest").transform;
-                bones[0].parent = skinnedObject.transform;
-                bones[0].localRotation = Quaternion.identity;
-                bones[0].localPosition = new Vector3(0, 0, -1.992755f);
-
-                bones[1] = new GameObject("Distant").transform;
-                bones[1].parent = skinnedObject.transform;
-                bones[1].localRotation = Quaternion.identity;
-                bones[1].localPosition = new Vector3(0f, 0f, -2.366901f);
+                bones[0] = rearSegment.transform;
+                bones[1] = segment.transform;
 
                 // Calculate bindposes for bones
                 connectorMesh.bindposes = new[] {
@@ -174,9 +167,6 @@ namespace SubnauticaSeaTruckFlexible.Jointing
 
                 // Destroy original mesh object
                 UnityEngine.Object.Destroy(connectorMeshFilter.gameObject);
-
-                // Reparent to rear segment
-                bones[0].parent = rearSegment.transform;
 
                 // Make mesh colliders from simple quads in place of box colliders
                 foreach (var connectorCollider in openedGo.GetComponentsInChildren<BoxCollider>())
@@ -248,12 +238,6 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     skinnedCollisionRenderer.sharedMesh = colliderMesh;
                     skinnedCollisionRenderer.bones = bones;
                     skinnedCollisionRenderer.enabled = false;
-                }
-
-                if (segment.isMainCab)
-                {
-                    // Adjust position by specified amount
-                    bones[0].localPosition += Vector3.back * 0.1165f;
                 }
 
                 openedGo.GetComponentsInChildren(meshColliders);
@@ -403,7 +387,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
         [HarmonyPostfix()]
         static void UpdateConnectorCollision(SeaTruckMotor __instance)
         {
-            foreach (var meshCollider in SeaTruckSegmentPatches.meshColliders)
+            foreach (var meshCollider in SeaTruckSegmentPatches.meshColliders.Where(collider => collider))
             {
                 var colliderMesh = meshCollider.sharedMesh;
                 meshCollider.gameObject.GetComponent<SkinnedMeshRenderer>().BakeMesh(colliderMesh);
