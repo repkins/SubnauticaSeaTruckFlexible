@@ -9,7 +9,7 @@ namespace SubnauticaSeaTruckFlexible.FixedCamera
 {
     internal class FixedCameraController : MonoBehaviour
     {
-        private bool isActive = false;
+        public bool isActive = false;
         private bool toggleNextFrame = false;
 
         private Transform camTransform;
@@ -49,12 +49,20 @@ namespace SubnauticaSeaTruckFlexible.FixedCamera
                 this.origCamLocalOrientation = this.camTransform.localRotation;
 
                 this.camTransform.SetParent(null, true);
+
+                Player.main.SetHeadVisible(true, false);
+
+                Player.main.scubaMaskModel.SetActive(false);
             }
             else
             {
                 this.camTransform.SetParent(this.origCamParentTransform, true);
                 this.camTransform.localPosition = this.origCamLocalPosition; 
                 this.camTransform.localRotation = this.origCamLocalOrientation;
+
+                Player.main.SetHeadVisible(false, true);
+
+                Player.main.scubaMaskModel.SetActive(true);
             }
         }
     }
