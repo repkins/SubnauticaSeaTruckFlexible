@@ -7,8 +7,6 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
-using System.Text;
-using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace SubnauticaSeaTruckFlexible.Jointing
@@ -122,7 +120,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     }
                     else
                     {
-                        Logger.Warning($"Boneweights for \"{connectorMesh.name}\" mesh does not exist");
+                        Logger.Warning($"Boneweights for \"{meshName}\" mesh does not exist");
                     }
                 }
 
@@ -211,7 +209,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     skinnedCollisionRenderer.enabled = false;
                 }
 
-                openedGo.GetComponentsInChildren(meshColliders);
+                meshColliders.Add(segment, openedGo.GetComponentsInChildren<MeshCollider>());
             }
 
             // Offset rear segment before creating joint
@@ -254,6 +252,13 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             yield break;
         }
 
+        [HarmonyPatch(nameof(SeaTruckSegment.OnDestroy))]
+        [HarmonyPostfix()]
+        static void ClearMeshColliders(SeaTruckSegment __instance)
+        {
+            meshColliders.Remove(__instance);
+        }
+
         [HarmonyPatch(nameof(SeaTruckSegment.OnConnectionChanged))]
         [HarmonyTranspiler()]
         static IEnumerable<CodeInstruction> RemoveRigidbodyDestruction(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
@@ -286,7 +291,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             }
         }
 
-        public static List<MeshCollider> meshColliders = new List<MeshCollider>();
+        public static Dictionary<SeaTruckSegment, MeshCollider[]> meshColliders = new Dictionary<SeaTruckSegment, MeshCollider[]>();
     }
 
     [HarmonyPatch(typeof(SeaTruckMotor))]
@@ -296,7 +301,11 @@ namespace SubnauticaSeaTruckFlexible.Jointing
         [HarmonyPostfix()]
         static void UpdateConnectorCollision(SeaTruckMotor __instance)
         {
-            foreach (var meshCollider in SeaTruckSegmentPatches.meshColliders.Where(collider => collider))
+            var allMeshColliders = SeaTruckSegmentPatches.meshColliders.Values
+                .SelectMany(colliders => colliders)
+                .Where(collider => collider);
+
+            foreach (var meshCollider in allMeshColliders)
             {
                 var colliderMesh = meshCollider.sharedMesh;
                 meshCollider.gameObject.GetComponent<SkinnedMeshRenderer>().BakeMesh(colliderMesh);
