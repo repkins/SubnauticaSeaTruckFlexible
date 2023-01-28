@@ -14,8 +14,6 @@ namespace SubnauticaSeaTruckFlexible.Jointing
     [HarmonyPatch(typeof(SeaTruckSegment))]
     static class SeaTruckSegmentPatches
     {
-        static BoneWeight[] boneWeights;
-
         [HarmonyPatch(nameof(SeaTruckSegment.OnConnectionChanged))]
         [HarmonyPrefix()]
         static void DestroyJoint(SeaTruckSegment __instance)
@@ -78,8 +76,8 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                 // Assign connecting segments as 2 bones
                 var bones = new Transform[2];
 
-                bones[0] = rearSegment.transform;
                 bones[1] = segment.transform;
+                bones[0] = rearSegment.transform;
 
                 // Calculate bindposes for bones
                 connectorMesh.bindposes = new[] {
@@ -87,45 +85,42 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     bones[1].worldToLocalMatrix * skinnedObject.transform.localToWorldMatrix
                 };
 
-                if (boneWeights == null)
+                // Load bone weights for mesh
+                var meshName = connectorMesh.name.Replace(" Instance", string.Empty);
+                var boneWeightsFilePath = Path.Combine("Assets", "boneweights", $"{meshName}.bytes");
+                var executingAssemblyPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+
+                if (File.Exists(Path.Combine(executingAssemblyPath, boneWeightsFilePath)))
                 {
-                    // Load bone weights data for mesh
-                    var meshName = connectorMesh.name.Replace(" Instance", string.Empty);
-                    var boneWeightsFilePath = Path.Combine("Assets", "boneweights", $"{meshName}.bytes");
-                    var executingAssemblyPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-
-                    if (File.Exists(Path.Combine(executingAssemblyPath, boneWeightsFilePath)))
+                    using (var fileStream = new FileStream(Path.Combine(executingAssemblyPath, boneWeightsFilePath), FileMode.Open))
+                    using (var binaryReader = new BinaryReader(fileStream))
                     {
-                        using (var fileStream = new FileStream(Path.Combine(executingAssemblyPath, boneWeightsFilePath), FileMode.Open))
-                        using (var binaryReader = new BinaryReader(fileStream))
+                        var vertexCount = binaryReader.ReadInt32();
+                        var boneWeights = new BoneWeight[vertexCount];
+
+                        for (var i = 0; i < vertexCount; i++)
                         {
-                            var vertexCount = binaryReader.ReadInt32();
-                            boneWeights = new BoneWeight[vertexCount];
+                            boneWeights[i].boneIndex0 = binaryReader.ReadInt32();
+                            boneWeights[i].weight0 = binaryReader.ReadSingle();
 
-                            for (var i = 0; i < vertexCount; i++)
-                            {
-                                boneWeights[i].boneIndex0 = binaryReader.ReadInt32();
-                                boneWeights[i].weight0 = binaryReader.ReadSingle();
+                            boneWeights[i].boneIndex1 = binaryReader.ReadInt32();
+                            boneWeights[i].weight1 = binaryReader.ReadSingle();
 
-                                boneWeights[i].boneIndex1 = binaryReader.ReadInt32();
-                                boneWeights[i].weight1 = binaryReader.ReadSingle();
+                            boneWeights[i].boneIndex2 = binaryReader.ReadInt32();
+                            boneWeights[i].weight2 = binaryReader.ReadSingle();
 
-                                boneWeights[i].boneIndex2 = binaryReader.ReadInt32();
-                                boneWeights[i].weight2 = binaryReader.ReadSingle();
-
-                                boneWeights[i].boneIndex3 = binaryReader.ReadInt32();
-                                boneWeights[i].weight3 = binaryReader.ReadSingle();
-                            }
+                            boneWeights[i].boneIndex3 = binaryReader.ReadInt32();
+                            boneWeights[i].weight3 = binaryReader.ReadSingle();
                         }
-                    }
-                    else
-                    {
-                        Logger.Warning($"Boneweights for \"{meshName}\" mesh does not exist");
+
+                        // Assign bone weights to mesh
+                        connectorMesh.boneWeights = boneWeights;
                     }
                 }
-
-                // Assign bone weights to mesh
-                connectorMesh.boneWeights = boneWeights;
+                else
+                {
+                    Logger.Warning($"Boneweights for \"{meshName}\" mesh does not exist");
+                }
 
                 // Prepare renderer
                 var skinnedRenderer = skinnedObject.AddComponent<SkinnedMeshRenderer>();
@@ -318,6 +313,8 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     meshCollider.sharedMesh = colliderMesh;
                 }
             }
+
+            Utils.DrawConnectorColliderLines(__instance);
         }
     }
 }

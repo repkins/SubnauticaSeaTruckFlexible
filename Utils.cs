@@ -42,7 +42,7 @@ namespace SubnauticaSeaTruckFlexible
             }
         }
 
-        static void DrawConnectorColliderLines(SeaTruckSegment segment)
+        public static void DrawConnectorColliderLines(SeaTruckSegment segment)
         {
             if (!segment.isRearConnected)
             {
