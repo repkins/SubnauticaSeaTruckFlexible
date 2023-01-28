@@ -209,7 +209,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     skinnedCollisionRenderer.enabled = false;
                 }
 
-                meshColliders.Add(segment, openedGo.GetComponentsInChildren<MeshCollider>());
+                MeshColliders.Add(segment, openedGo.GetComponentsInChildren<MeshCollider>());
             }
 
             // Offset rear segment before creating joint
@@ -256,7 +256,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
         [HarmonyPostfix()]
         static void ClearMeshColliders(SeaTruckSegment __instance)
         {
-            meshColliders.Remove(__instance);
+            MeshColliders.Remove(__instance);
         }
 
         [HarmonyPatch(nameof(SeaTruckSegment.OnConnectionChanged))]
@@ -291,37 +291,32 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             }
         }
 
-        public static Dictionary<SeaTruckSegment, MeshCollider[]> meshColliders = new Dictionary<SeaTruckSegment, MeshCollider[]>();
-    }
+        static Dictionary<SeaTruckSegment, MeshCollider[]> MeshColliders = new Dictionary<SeaTruckSegment, MeshCollider[]>();
 
-    [HarmonyPatch(typeof(SeaTruckMotor))]
-    static class SeaTruckMotorPatches
-    {
-        [HarmonyPatch(nameof(SeaTruckMotor.FixedUpdate))]
+        [HarmonyPatch(nameof(SeaTruckSegment.Update))]
         [HarmonyPostfix()]
-        static void UpdateConnectorCollision(SeaTruckMotor __instance)
+        static void UpdateConnectorCollision(SeaTruckSegment __instance)
         {
-            var allMeshColliders = SeaTruckSegmentPatches.meshColliders.Values
-                .SelectMany(colliders => colliders)
-                .Where(collider => collider);
-
-            foreach (var meshCollider in allMeshColliders)
+            if (MeshColliders.TryGetValue(__instance, out var segmentMeshColliders))
             {
-                var colliderMesh = meshCollider.sharedMesh;
-                meshCollider.gameObject.GetComponent<SkinnedMeshRenderer>().BakeMesh(colliderMesh);
-
-                var invScale = new Vector3(1f / meshCollider.transform.localScale.x,
-                                        1f / meshCollider.transform.localScale.y,
-                                        1f / meshCollider.transform.localScale.z);
-
-                var vertices = colliderMesh.vertices;
-                for (var i = 0; i < vertices.Length; i++)
+                foreach (var meshCollider in segmentMeshColliders)
                 {
-                    vertices[i].Scale(invScale);
-                }
-                colliderMesh.vertices = vertices;
+                    var colliderMesh = meshCollider.sharedMesh;
+                    meshCollider.gameObject.GetComponent<SkinnedMeshRenderer>().BakeMesh(colliderMesh);
 
-                meshCollider.sharedMesh = colliderMesh;
+                    var invScale = new Vector3(1f / meshCollider.transform.localScale.x,
+                                            1f / meshCollider.transform.localScale.y,
+                                            1f / meshCollider.transform.localScale.z);
+
+                    var vertices = colliderMesh.vertices;
+                    for (var i = 0; i < vertices.Length; i++)
+                    {
+                        vertices[i].Scale(invScale);
+                    }
+                    colliderMesh.vertices = vertices;
+
+                    meshCollider.sharedMesh = colliderMesh;
+                }
             }
         }
     }
