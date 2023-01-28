@@ -58,6 +58,12 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                 rearSegment.transform.localPosition += Vector3.back * 0.3835f;
             }
 
+            // Assign connecting segments as 2 bones
+            var bones = new Transform[2];
+
+            bones[0] = segment.transform;
+            bones[1] = rearSegment.transform;
+
             // Convert connected mesh to skinned
             var openedGo = segment.rearConnection.openedGo;
             if (!openedGo.transform.Find("Skinned Mesh"))
@@ -72,18 +78,6 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                 skinnedObject.transform.localPosition = connectorMeshFilter.transform.localPosition;
                 skinnedObject.transform.localRotation = connectorMeshFilter.transform.localRotation;
                 skinnedObject.transform.localScale = connectorMeshFilter.transform.localScale;
-
-                // Assign connecting segments as 2 bones
-                var bones = new Transform[2];
-
-                bones[1] = segment.transform;
-                bones[0] = rearSegment.transform;
-
-                // Calculate bindposes for bones
-                connectorMesh.bindposes = new[] {
-                    bones[0].worldToLocalMatrix * skinnedObject.transform.localToWorldMatrix,
-                    bones[1].worldToLocalMatrix * skinnedObject.transform.localToWorldMatrix
-                };
 
                 // Load bone weights for mesh
                 var meshName = connectorMesh.name.Replace(" Instance", string.Empty);
@@ -121,6 +115,12 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                 {
                     Logger.Warning($"Boneweights for \"{meshName}\" mesh does not exist");
                 }
+
+                // Calculate bindposes for bones
+                connectorMesh.bindposes = new[] {
+                    bones[0].worldToLocalMatrix * skinnedObject.transform.localToWorldMatrix,
+                    bones[1].worldToLocalMatrix * skinnedObject.transform.localToWorldMatrix
+                };
 
                 // Prepare renderer
                 var skinnedRenderer = skinnedObject.AddComponent<SkinnedMeshRenderer>();
