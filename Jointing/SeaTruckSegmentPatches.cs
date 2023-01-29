@@ -22,9 +22,9 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             {
                 if (__instance.gameObject.TryGetComponent<Joint>(out var joint))
                 {
-                    Logger.Info($"Separating joint");
+                    Logger.Info($"Destroying joint of {__instance}");
 
-                    joint.connectedBody = null;
+                    UnityEngine.Object.Destroy(joint);
                 }
             }
         }
@@ -61,12 +61,13 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             // Assign connecting segments as 2 bones
             var bones = new Transform[2];
 
-            bones[0] = segment.transform;
-            bones[1] = rearSegment.transform;
+            bones[0] = rearSegment.transform;
+            bones[1] = segment.transform;
 
             // Convert connected mesh to skinned
             var openedGo = segment.rearConnection.openedGo;
-            if (!openedGo.transform.Find("Skinned Mesh"))
+            var skinnedMeshTransform = openedGo.transform.Find("Skinned Mesh");
+            if (!skinnedMeshTransform)
             {
                 // Prepare skinned mesh object
                 var connectorMeshFilter = openedGo.GetComponentInChildren<MeshFilter>();
@@ -116,45 +117,38 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     Logger.Warning($"Boneweights for \"{meshName}\" mesh does not exist");
                 }
 
-                // Calculate bindposes for bones
-                connectorMesh.bindposes = new[] {
-                    bones[0].worldToLocalMatrix * skinnedObject.transform.localToWorldMatrix,
-                    bones[1].worldToLocalMatrix * skinnedObject.transform.localToWorldMatrix
-                };
-
                 // Prepare renderer
-                var skinnedRenderer = skinnedObject.AddComponent<SkinnedMeshRenderer>();
-                skinnedRenderer.materials = openedGo.GetComponentInChildren<MeshRenderer>().materials;
-                skinnedRenderer.localBounds = connectorMesh.bounds;
-                skinnedRenderer.sharedMesh = connectorMesh;
-                skinnedRenderer.bones = bones;
+                var newSkinnedRenderer = skinnedObject.AddComponent<SkinnedMeshRenderer>();
+                newSkinnedRenderer.materials = openedGo.GetComponentInChildren<MeshRenderer>().materials;
+                newSkinnedRenderer.localBounds = connectorMesh.bounds;
+                newSkinnedRenderer.sharedMesh = connectorMesh;
 
                 // Destroy original mesh object
                 UnityEngine.Object.Destroy(connectorMeshFilter.gameObject);
 
                 // Make mesh colliders from simple quads in place of box colliders
-                foreach (var connectorCollider in openedGo.GetComponentsInChildren<BoxCollider>())
+                foreach (var connectorBoxCollider in openedGo.GetComponentsInChildren<BoxCollider>())
                 {
-                    var localExtents = connectorCollider.size / 2;
+                    var localExtents = connectorBoxCollider.size / 2;
 
                     // Create mesh
                     var colliderMesh = new Mesh();
-                    if (connectorCollider.transform.localScale.x > connectorCollider.transform.localScale.y)
+                    if (connectorBoxCollider.transform.localScale.x > connectorBoxCollider.transform.localScale.y)
                     {
                         colliderMesh.vertices = new Vector3[] {
-                            connectorCollider.center + new Vector3(-localExtents.x, 0f, -localExtents.z),
-                            connectorCollider.center + new Vector3(-localExtents.x, 0f, localExtents.z),
-                            connectorCollider.center + new Vector3(localExtents.x, 0f, localExtents.z),
-                            connectorCollider.center + new Vector3(localExtents.x, 0f, -localExtents.z)
+                            connectorBoxCollider.center + new Vector3(-localExtents.x, 0f, -localExtents.z),
+                            connectorBoxCollider.center + new Vector3(-localExtents.x, 0f, localExtents.z),
+                            connectorBoxCollider.center + new Vector3(localExtents.x, 0f, localExtents.z),
+                            connectorBoxCollider.center + new Vector3(localExtents.x, 0f, -localExtents.z)
                         };
                     }
                     else
                     {
                         colliderMesh.vertices = new Vector3[] {
-                            connectorCollider.center + new Vector3(0f, -localExtents.y, -localExtents.z),
-                            connectorCollider.center + new Vector3(0f, -localExtents.y, localExtents.z),
-                            connectorCollider.center + new Vector3(0f, localExtents.y, localExtents.z),
-                            connectorCollider.center + new Vector3(0f, localExtents.y, -localExtents.z)
+                            connectorBoxCollider.center + new Vector3(0f, -localExtents.y, -localExtents.z),
+                            connectorBoxCollider.center + new Vector3(0f, -localExtents.y, localExtents.z),
+                            connectorBoxCollider.center + new Vector3(0f, localExtents.y, localExtents.z),
+                            connectorBoxCollider.center + new Vector3(0f, localExtents.y, -localExtents.z)
                         };
                     }
                     colliderMesh.triangles = new[] {
@@ -183,28 +177,49 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                             weight0 = 1,
                         }
                     };
-                    colliderMesh.bindposes = new[] {
-                        bones[0].worldToLocalMatrix * connectorCollider.gameObject.transform.localToWorldMatrix,
-                        bones[1].worldToLocalMatrix * connectorCollider.gameObject.transform.localToWorldMatrix
-                    };
 
                     Mesh meshForCollider = new Mesh();
 
-                    var meshCollider = connectorCollider.gameObject.AddComponent<MeshCollider>();
-                    meshCollider.sharedMaterial = connectorCollider.sharedMaterial;
+                    var meshCollider = connectorBoxCollider.gameObject.AddComponent<MeshCollider>();
+                    meshCollider.sharedMaterial = connectorBoxCollider.sharedMaterial;
                     meshCollider.sharedMesh = meshForCollider;
                     meshCollider.convex = true;
                     meshCollider.cookingOptions = MeshColliderCookingOptions.None;
 
-                    connectorCollider.enabled = false;
+                    connectorBoxCollider.enabled = false;
 
-                    var skinnedCollisionRenderer = connectorCollider.gameObject.AddComponent<SkinnedMeshRenderer>();
+                    var skinnedCollisionRenderer = connectorBoxCollider.gameObject.AddComponent<SkinnedMeshRenderer>();
                     skinnedCollisionRenderer.sharedMesh = colliderMesh;
-                    skinnedCollisionRenderer.bones = bones;
                     skinnedCollisionRenderer.enabled = false;
                 }
 
                 MeshColliders.Add(segment, openedGo.GetComponentsInChildren<MeshCollider>());
+
+                skinnedMeshTransform = skinnedObject.transform;
+            }
+
+            // Assign new bones to renderer
+            var skinnedRenderer = skinnedMeshTransform.gameObject.GetComponent<SkinnedMeshRenderer>();
+            skinnedRenderer.bones = bones;
+
+            // Calculate bindposes of renderer
+            skinnedRenderer.sharedMesh.bindposes = new[] {
+                bones[0].worldToLocalMatrix * skinnedMeshTransform.gameObject.transform.localToWorldMatrix,
+                bones[1].worldToLocalMatrix * skinnedMeshTransform.gameObject.transform.localToWorldMatrix
+            };
+
+            if (MeshColliders.TryGetValue(segment, out var segmentMeshColliders))
+            {
+                // Assign bones and calculate bindposes for collider mesh renderers
+                foreach (var meshCollider in segmentMeshColliders)
+                {
+                    var colliderMeshRenderer = meshCollider.gameObject.GetComponent<SkinnedMeshRenderer>();
+                    colliderMeshRenderer.bones = bones;
+                    colliderMeshRenderer.sharedMesh.bindposes = new[] {
+                        bones[0].worldToLocalMatrix * meshCollider.gameObject.transform.localToWorldMatrix,
+                        bones[1].worldToLocalMatrix * meshCollider.gameObject.transform.localToWorldMatrix
+                    };
+                }
             }
 
             // Offset rear segment before creating joint
