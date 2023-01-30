@@ -221,6 +221,10 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     };
                 }
             }
+            else
+            {
+                Logger.Warning($"Could not find mesh colliders of {segment}");
+            }
 
             // Offset rear segment before creating joint
             rearSegment.transform.localPosition += Vector3.back * 0.25f;
@@ -314,9 +318,9 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     var colliderMesh = meshCollider.sharedMesh;
                     meshCollider.gameObject.GetComponent<SkinnedMeshRenderer>().BakeMesh(colliderMesh);
 
-                    var invScale = new Vector3(1f / meshCollider.transform.localScale.x,
-                                            1f / meshCollider.transform.localScale.y,
-                                            1f / meshCollider.transform.localScale.z);
+                    var invScale = new Vector3(1f / meshCollider.transform.lossyScale.x,
+                                            1f / meshCollider.transform.lossyScale.y,
+                                            1f / meshCollider.transform.lossyScale.z);
 
                     var vertices = colliderMesh.vertices;
                     for (var i = 0; i < vertices.Length; i++)
@@ -329,7 +333,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                 }
             }
 
-            Utils.DrawConnectorColliderLines(__instance);
+            //Utils.DrawConnectorColliderLines(__instance);
         }
     }
 }
