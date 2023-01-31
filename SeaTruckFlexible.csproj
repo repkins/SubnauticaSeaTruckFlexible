@@ -76,6 +76,7 @@
     <Compile Include="FixedCamera\FixedCameraController.cs" />
     <Compile Include="FixedCamera\MainGameControllerPatches.cs" />
     <Compile Include="FixedCamera\PlayerControllerPatches.cs" />
+    <Compile Include="Jointing\SeaTruckSegmentSettings.cs" />
     <Compile Include="Jointing\SeaTruckSegmentPatches.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="MainPatcher.cs" />

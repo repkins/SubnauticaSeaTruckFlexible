@@ -14,6 +14,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
     [HarmonyPatch(typeof(SeaTruckSegment))]
     static class SeaTruckSegmentPatches
     {
+
         [HarmonyPatch(nameof(SeaTruckSegment.OnConnectionChanged))]
         [HarmonyPrefix()]
         static void DestroyJoint(SeaTruckSegment __instance)
@@ -53,10 +54,8 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             }
             while (rearSegment.updateDockedPosition);
 
-            if (segment.isMainCab)
-            {
-                rearSegment.transform.localPosition += Vector3.back * 0.3835f;
-            }
+            var segmentTechType = CraftData.GetTechType(segment.gameObject);
+            rearSegment.transform.localPosition += SeaTruckSegmentSettings.SegmentOffsets[segmentTechType];
 
             // Assign connecting segments as 2 bones
             var bones = new Transform[2];
