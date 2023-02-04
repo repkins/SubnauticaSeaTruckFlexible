@@ -40,9 +40,12 @@ namespace SubnauticaSeaTruckFlexible.Jointing
         {
             var segment = __instance;
 
-            if (segment.isRearConnected)
+            if (segment.isRearConnected && !__instance.gameObject.GetComponent<Joint>())
             {
-                segment.rearConnection.connection.truckSegment.rb.isKinematic = true;
+                var segmentsChains = new List<SeaTruckSegment>();
+                segment.GetTruckChain(segmentsChains);
+                segmentsChains.ForEach(segmentInChain => segmentInChain.rb.isKinematic = true);
+                segmentsChains.ForEach(segmentInChain => Logger.Debug($"isKinematic = true for {segmentInChain}"));
 
                 segment.StartCoroutine(AddJointAfterDocking(segment));
             }
@@ -260,10 +263,12 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                 collider.enabled = true;
             }
 
-            rearSegment.rb.isKinematic = false;
+            var segmentsChains = new List<SeaTruckSegment>();
+            segment.GetTruckChain(segmentsChains);
+            segmentsChains.ForEach(segmentInChain => segmentInChain.rb.isKinematic = false);
+            segmentsChains.ForEach(segmentInChain => Logger.Debug($"isKinematic = false for {segmentInChain}"));
 
-            Utils.DrawDebugPrimitive(segment.gameObject, joint.anchor);
-            //DrawDebugPrimitive(rearSegment.gameObject, joint.connectedAnchor);
+            //Utils.DrawDebugPrimitive(segment.gameObject, joint.anchor);
 
             Logger.Debug($"joint = {joint}");
             Logger.Debug($"joint.connectedBody = {joint.connectedBody}");
