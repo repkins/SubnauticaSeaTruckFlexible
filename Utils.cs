@@ -18,17 +18,23 @@ namespace SubnauticaSeaTruckFlexible
 
         public static GameObject DrawDebugPrimitive(GameObject go, Vector3 localPosition)
         {
-            var spherePrim = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            spherePrim.name = DebugPrimitiveName;
-            if (spherePrim.TryGetComponent<Collider>(out var collider))
+            var primTransform = go.transform.Find(DebugPrimitiveName);
+            if (!primTransform)
             {
-                UnityEngine.Object.Destroy(collider);
+                var spherePrim = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                spherePrim.name = DebugPrimitiveName;
+                if (spherePrim.TryGetComponent<Collider>(out var collider))
+                {
+                    UnityEngine.Object.Destroy(collider);
+                }
+                primTransform = spherePrim.transform;
+                primTransform.parent = go.transform;
             }
-            spherePrim.transform.parent = go.transform;
-            spherePrim.transform.localPosition = localPosition;
-            spherePrim.transform.localScale = Vector3.one * 0.25f;
 
-            return spherePrim;
+            primTransform.localPosition = localPosition;
+            primTransform.localScale = Vector3.one * 0.25f;
+
+            return primTransform.gameObject;
         }
 
         public static void ClearDebugPrimitives(GameObject go)
@@ -96,6 +102,7 @@ namespace SubnauticaSeaTruckFlexible
             line.positionCount = 2;
             line.useWorldSpace = true;
             line.transform.SetParent(attachTo.transform);
+            line.allowOcclusionWhenDynamic = false;
         }
 
         static void PositionLine(GameObject attachTo, int index, Vector3 start, Vector3 end)

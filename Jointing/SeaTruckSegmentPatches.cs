@@ -237,7 +237,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             rearSegment.transform.parent = null;
 
             rearSegment.rb.centerOfMass = Vector3.zero;
-            segment.rb.centerOfMass = Vector3.zero;
+            segment.rb.centerOfMass = SeaTruckSegmentSettings.ConnectorJointAnchors[segmentTechType];
 
             // Create joint
             if (!segment.gameObject.TryGetComponent<Joint>(out var joint))
@@ -246,7 +246,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
 
                 joint = segment.gameObject.AddComponent<CharacterJoint>();
 
-                joint.anchor = Vector3.zero;
+                joint.anchor = SeaTruckSegmentSettings.ConnectorJointAnchors[segmentTechType];
             }
 
             Logger.Info($"Connecting joint");
@@ -261,7 +261,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
 
             rearSegment.rb.isKinematic = false;
 
-            //DrawDebugPrimitive(segment.gameObject, joint.anchor);
+            Utils.DrawDebugPrimitive(segment.gameObject, joint.anchor);
             //DrawDebugPrimitive(rearSegment.gameObject, joint.connectedAnchor);
 
             Logger.Debug($"joint = {joint}");
