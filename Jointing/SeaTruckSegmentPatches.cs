@@ -236,7 +236,8 @@ namespace SubnauticaSeaTruckFlexible.Jointing
 
             rearSegment.transform.parent = null;
 
-            rearSegment.rb.centerOfMass = Vector3.zero;
+            var rearSegmentTechType = CraftData.GetTechType(rearSegment.gameObject);
+            rearSegment.rb.centerOfMass = SeaTruckSegmentSettings.ConnectorJointAnchors[rearSegmentTechType];
             segment.rb.centerOfMass = SeaTruckSegmentSettings.ConnectorJointAnchors[segmentTechType];
 
             // Create joint

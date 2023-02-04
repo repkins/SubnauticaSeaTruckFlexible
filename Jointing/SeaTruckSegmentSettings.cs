@@ -36,7 +36,8 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             { TechType.SeaTruckStorageModule, Vector3.forward * -0.356f },
             { TechType.SeaTruckSleeperModule, Vector3.forward * -0.356f },
             { TechType.SeaTruckAquariumModule, Vector3.forward * -0.356f },
-            { TechType.SeaTruckTeleportationModule, Vector3.forward * -0.356f }
+            { TechType.SeaTruckTeleportationModule, Vector3.forward * -0.356f },
+            { TechType.SeaTruckDockingModule, Vector3.zero },
         };
     }
 }
