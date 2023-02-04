@@ -14,7 +14,6 @@ namespace SubnauticaSeaTruckFlexible.Jointing
     [HarmonyPatch(typeof(SeaTruckSegment))]
     static class SeaTruckSegmentPatches
     {
-
         [HarmonyPatch(nameof(SeaTruckSegment.OnConnectionChanged))]
         [HarmonyPrefix()]
         static void DestroyJoint(SeaTruckSegment __instance)
@@ -26,6 +25,11 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     Logger.Info($"Destroying joint of {__instance}");
 
                     UnityEngine.Object.Destroy(joint);
+
+                    var openedGo = __instance.rearConnection.openedGo;
+
+                    var segmentTechType = CraftData.GetTechType(__instance.gameObject);
+                    openedGo.transform.localPosition -= SeaTruckSegmentSettings.ConnectorFrontOffsets[segmentTechType];
                 }
             }
         }
@@ -38,7 +42,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
 
             if (segment.isRearConnected)
             {
-                segment.rb.isKinematic = true;
+                segment.rearConnection.connection.truckSegment.rb.isKinematic = true;
 
                 segment.StartCoroutine(AddJointAfterDocking(segment));
             }
@@ -47,6 +51,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
         static IEnumerator AddJointAfterDocking(SeaTruckSegment segment)
         {
             var rearSegment = segment.rearConnection.connection.truckSegment;
+            var openedGo = segment.rearConnection.openedGo;
 
             do
             {
@@ -54,8 +59,10 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             }
             while (rearSegment.updateDockedPosition);
 
+            // Apply connector front/back offsets
             var segmentTechType = CraftData.GetTechType(segment.gameObject);
-            rearSegment.transform.localPosition += SeaTruckSegmentSettings.SegmentOffsets[segmentTechType];
+            rearSegment.transform.localPosition += SeaTruckSegmentSettings.ConnectorBackOffsets[segmentTechType];
+            openedGo.transform.localPosition += SeaTruckSegmentSettings.ConnectorFrontOffsets[segmentTechType];
 
             // Assign connecting segments as 2 bones
             var bones = new Transform[2];
@@ -63,8 +70,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             bones[0] = rearSegment.transform;
             bones[1] = segment.transform;
 
-            // Convert connected mesh to skinned
-            var openedGo = segment.rearConnection.openedGo;
+            // Ensures original mesh is converted and replaced with skinned connector mesh
             var skinnedMeshTransform = openedGo.transform.Find("Skinned Mesh");
             if (!skinnedMeshTransform)
             {
@@ -116,16 +122,34 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     Logger.Warning($"Boneweights for \"{meshName}\" mesh does not exist");
                 }
 
-                // Prepare renderer
+                // Prepare new renderer
+                var originalMeshRenderer = openedGo.GetComponentInChildren<MeshRenderer>();
                 var newSkinnedRenderer = skinnedObject.AddComponent<SkinnedMeshRenderer>();
-                newSkinnedRenderer.materials = openedGo.GetComponentInChildren<MeshRenderer>().materials;
+                newSkinnedRenderer.materials = originalMeshRenderer.materials;
+                newSkinnedRenderer.shadowCastingMode = originalMeshRenderer.shadowCastingMode;
+                newSkinnedRenderer.receiveShadows = originalMeshRenderer.receiveShadows;
                 newSkinnedRenderer.localBounds = connectorMesh.bounds;
                 newSkinnedRenderer.sharedMesh = connectorMesh;
 
                 // Destroy original mesh object
                 UnityEngine.Object.Destroy(connectorMeshFilter.gameObject);
 
-                // Make mesh colliders from simple quads in place of box colliders
+                skinnedMeshTransform = skinnedObject.transform;
+            }
+
+            // Assign new bones to renderer
+            var skinnedRenderer = skinnedMeshTransform.gameObject.GetComponent<SkinnedMeshRenderer>();
+            skinnedRenderer.bones = bones;
+
+            // Calculate bindposes of renderer
+            skinnedRenderer.sharedMesh.bindposes = new[] {
+                bones[0].worldToLocalMatrix * skinnedMeshTransform.gameObject.transform.localToWorldMatrix,
+                bones[1].worldToLocalMatrix * skinnedMeshTransform.gameObject.transform.localToWorldMatrix
+            };
+
+            // Ensures mesh colliders from simple quads is created in place of original box colliders
+            if (!MeshColliders.TryGetValue(segment, out var segmentMeshColliders))
+            {
                 foreach (var connectorBoxCollider in openedGo.GetComponentsInChildren<BoxCollider>())
                 {
                     var localExtents = connectorBoxCollider.size / 2;
@@ -135,10 +159,10 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     if (connectorBoxCollider.transform.localScale.x > connectorBoxCollider.transform.localScale.y)
                     {
                         colliderMesh.vertices = new Vector3[] {
-                            connectorBoxCollider.center + new Vector3(-localExtents.x, 0f, -localExtents.z),
-                            connectorBoxCollider.center + new Vector3(-localExtents.x, 0f, localExtents.z),
-                            connectorBoxCollider.center + new Vector3(localExtents.x, 0f, localExtents.z),
-                            connectorBoxCollider.center + new Vector3(localExtents.x, 0f, -localExtents.z)
+                            connectorBoxCollider.center + new Vector3(-localExtents.x, localExtents.y, -localExtents.z),
+                            connectorBoxCollider.center + new Vector3(-localExtents.x, localExtents.y, localExtents.z),
+                            connectorBoxCollider.center + new Vector3(localExtents.x, localExtents.y, localExtents.z),
+                            connectorBoxCollider.center + new Vector3(localExtents.x, localExtents.y, -localExtents.z)
                         };
                     }
                     else
@@ -154,7 +178,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                         0, 1, 2,
                         2, 3, 0
                     };
-                    colliderMesh.boneWeights = new[] { 
+                    colliderMesh.boneWeights = new[] {
                         new BoneWeight()
                         {
                             boneIndex0 = 0,
@@ -192,37 +216,19 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     skinnedCollisionRenderer.enabled = false;
                 }
 
-                MeshColliders.Add(segment, openedGo.GetComponentsInChildren<MeshCollider>());
-
-                skinnedMeshTransform = skinnedObject.transform;
+                segmentMeshColliders = openedGo.GetComponentsInChildren<MeshCollider>();
+                MeshColliders.Add(segment, segmentMeshColliders);
             }
 
-            // Assign new bones to renderer
-            var skinnedRenderer = skinnedMeshTransform.gameObject.GetComponent<SkinnedMeshRenderer>();
-            skinnedRenderer.bones = bones;
-
-            // Calculate bindposes of renderer
-            skinnedRenderer.sharedMesh.bindposes = new[] {
-                bones[0].worldToLocalMatrix * skinnedMeshTransform.gameObject.transform.localToWorldMatrix,
-                bones[1].worldToLocalMatrix * skinnedMeshTransform.gameObject.transform.localToWorldMatrix
-            };
-
-            if (MeshColliders.TryGetValue(segment, out var segmentMeshColliders))
+            // Assign bones and calculate bindposes for collider mesh renderers
+            foreach (var meshCollider in segmentMeshColliders)
             {
-                // Assign bones and calculate bindposes for collider mesh renderers
-                foreach (var meshCollider in segmentMeshColliders)
-                {
-                    var colliderMeshRenderer = meshCollider.gameObject.GetComponent<SkinnedMeshRenderer>();
-                    colliderMeshRenderer.bones = bones;
-                    colliderMeshRenderer.sharedMesh.bindposes = new[] {
-                        bones[0].worldToLocalMatrix * meshCollider.gameObject.transform.localToWorldMatrix,
-                        bones[1].worldToLocalMatrix * meshCollider.gameObject.transform.localToWorldMatrix
-                    };
-                }
-            }
-            else
-            {
-                Logger.Warning($"Could not find mesh colliders of {segment}");
+                var colliderMeshRenderer = meshCollider.gameObject.GetComponent<SkinnedMeshRenderer>();
+                colliderMeshRenderer.bones = bones;
+                colliderMeshRenderer.sharedMesh.bindposes = new[] {
+                    bones[0].worldToLocalMatrix * meshCollider.gameObject.transform.localToWorldMatrix,
+                    bones[1].worldToLocalMatrix * meshCollider.gameObject.transform.localToWorldMatrix
+                };
             }
 
             // Offset rear segment before creating joint
@@ -253,7 +259,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                 collider.enabled = true;
             }
 
-            segment.rb.isKinematic = false;
+            rearSegment.rb.isKinematic = false;
 
             //DrawDebugPrimitive(segment.gameObject, joint.anchor);
             //DrawDebugPrimitive(rearSegment.gameObject, joint.connectedAnchor);
@@ -328,11 +334,14 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     }
                     colliderMesh.vertices = vertices;
 
-                    meshCollider.sharedMesh = colliderMesh;
+                    if (colliderMesh.vertexCount > 0)
+                    {
+                        meshCollider.sharedMesh = colliderMesh;
+                    }
                 }
             }
 
-            //Utils.DrawConnectorColliderLines(__instance);
+            Utils.DrawConnectorColliderLines(__instance);
         }
     }
 }
