@@ -42,11 +42,6 @@ namespace SubnauticaSeaTruckFlexible.Jointing
 
             if (segment.isRearConnected && !__instance.gameObject.GetComponent<Joint>())
             {
-                var segmentsChains = new List<SeaTruckSegment>();
-                segment.GetTruckChain(segmentsChains);
-                segmentsChains.ForEach(segmentInChain => segmentInChain.rb.isKinematic = true);
-                segmentsChains.ForEach(segmentInChain => Logger.Debug($"isKinematic = true for {segmentInChain}"));
-
                 segment.StartCoroutine(AddJointAfterDocking(segment));
             }
         }
@@ -237,8 +232,16 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             // Offset rear segment before creating joint
             rearSegment.transform.localPosition += Vector3.back * 0.25f;
 
+            // Deparent player piloting temporarly
+            if (Player.main.transform.parent == segment.motor.pilotPosition)
+            {
+                Player.main.transform.parent = null;
+            }
+
+            // Deparent
             rearSegment.transform.parent = null;
 
+            // Assign center of mass of connecting segments
             var rearSegmentTechType = CraftData.GetTechType(rearSegment.gameObject);
             rearSegment.rb.centerOfMass = SeaTruckSegmentSettings.ConnectorJointAnchors[rearSegmentTechType];
             segment.rb.centerOfMass = SeaTruckSegmentSettings.ConnectorJointAnchors[segmentTechType];
@@ -263,10 +266,11 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                 collider.enabled = true;
             }
 
-            var segmentsChains = new List<SeaTruckSegment>();
-            segment.GetTruckChain(segmentsChains);
-            segmentsChains.ForEach(segmentInChain => segmentInChain.rb.isKinematic = false);
-            segmentsChains.ForEach(segmentInChain => Logger.Debug($"isKinematic = false for {segmentInChain}"));
+            // Restore player pilotable parent if piloting
+            if (segment.motor.piloting && !Player.main.transform.parent)
+            {
+                Player.main.transform.parent = segment.motor.pilotPosition;
+            }
 
             //Utils.DrawDebugPrimitive(segment.gameObject, joint.anchor);
 
