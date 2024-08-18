@@ -49,7 +49,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
         static IEnumerator AddJointAfterDocking(SeaTruckSegment segment)
         {
             var rearSegment = segment.rearConnection.connection.truckSegment;
-            var openedGo = segment.rearConnection.openedGo;
+            var rearOpenedGo = segment.rearConnection.openedGo;
 
             do
             {
@@ -60,7 +60,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             // Apply connector front/back offsets
             var segmentTechType = CraftData.GetTechType(segment.gameObject);
             rearSegment.transform.localPosition += SeaTruckSegmentSettings.ConnectorBackOffsets[segmentTechType];
-            openedGo.transform.localPosition += SeaTruckSegmentSettings.ConnectorFrontOffsets[segmentTechType];
+            rearOpenedGo.transform.localPosition += SeaTruckSegmentSettings.ConnectorFrontOffsets[segmentTechType];
 
             // Assign connecting segments as 2 bones
             var bones = new Transform[2];
@@ -69,16 +69,16 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             bones[1] = segment.transform;
 
             // Ensures original mesh is converted and replaced with skinned connector mesh
-            var skinnedMeshTransform = openedGo.transform.Find("Skinned Mesh");
+            var skinnedMeshTransform = rearOpenedGo.transform.Find("Skinned Mesh");
             if (!skinnedMeshTransform)
             {
                 // Prepare skinned mesh object
-                var connectorMeshFilter = openedGo.GetComponentInChildren<MeshFilter>();
+                var connectorMeshFilter = rearOpenedGo.GetComponentInChildren<MeshFilter>();
                 var connectorMesh = connectorMeshFilter.mesh;
                 Logger.Debug($"Connector mesh {connectorMesh}");
 
                 var skinnedObject = new GameObject("Skinned Mesh");
-                skinnedObject.transform.parent = openedGo.transform;
+                skinnedObject.transform.parent = rearOpenedGo.transform;
                 skinnedObject.transform.localPosition = connectorMeshFilter.transform.localPosition;
                 skinnedObject.transform.localRotation = connectorMeshFilter.transform.localRotation;
                 skinnedObject.transform.localScale = connectorMeshFilter.transform.localScale;
@@ -121,7 +121,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                 }
 
                 // Prepare new renderer
-                var originalMeshRenderer = openedGo.GetComponentInChildren<MeshRenderer>();
+                var originalMeshRenderer = rearOpenedGo.GetComponentInChildren<MeshRenderer>();
                 var newSkinnedRenderer = skinnedObject.AddComponent<SkinnedMeshRenderer>();
                 newSkinnedRenderer.materials = originalMeshRenderer.materials;
                 newSkinnedRenderer.shadowCastingMode = originalMeshRenderer.shadowCastingMode;
@@ -148,7 +148,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             // Ensures mesh colliders from simple quads is created in place of original box colliders
             if (!MeshColliders.TryGetValue(segment, out var segmentMeshColliders))
             {
-                foreach (var connectorBoxCollider in openedGo.GetComponentsInChildren<BoxCollider>())
+                foreach (var connectorBoxCollider in rearOpenedGo.GetComponentsInChildren<BoxCollider>())
                 {
                     var localExtents = connectorBoxCollider.size / 2;
 
@@ -214,7 +214,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     skinnedCollisionRenderer.enabled = false;
                 }
 
-                segmentMeshColliders = openedGo.GetComponentsInChildren<MeshCollider>();
+                segmentMeshColliders = rearOpenedGo.GetComponentsInChildren<MeshCollider>();
                 MeshColliders.Add(segment, segmentMeshColliders);
             }
 
@@ -248,13 +248,18 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             segment.rb.centerOfMass = SeaTruckSegmentSettings.ConnectorJointAnchors[segmentTechType];
 
             // Create joint
-            if (!segment.gameObject.TryGetComponent<Joint>(out var joint))
+            if (!segment.gameObject.TryGetComponent<CharacterJoint>(out var joint))
             {
                 Logger.Info($"Creating joint");
 
                 joint = segment.gameObject.AddComponent<CharacterJoint>();
 
                 joint.anchor = SeaTruckSegmentSettings.ConnectorJointAnchors[segmentTechType];
+                joint.axis = Vector3.forward;
+                joint.lowTwistLimit = new SoftJointLimit() { limit = -20f };
+                joint.highTwistLimit = new SoftJointLimit() { limit = 20f };
+                joint.swing1Limit = new SoftJointLimit() { limit = 30f };
+                joint.swing2Limit = new SoftJointLimit() { limit = 30f };
             }
 
             Logger.Info($"Connecting joint");
@@ -276,8 +281,14 @@ namespace SubnauticaSeaTruckFlexible.Jointing
             //Utils.DrawDebugPrimitive(segment.gameObject, joint.anchor);
 
             Logger.Debug($"joint = {joint}");
+            Logger.Debug($"joint.axis = {joint.axis}");
             Logger.Debug($"joint.connectedBody = {joint.connectedBody}");
             Logger.Debug($"joint.connectedAnchor = {joint.connectedAnchor}");
+            Logger.Debug($"joint.swingAxis = {joint.swingAxis}");
+            Logger.Debug($"joint.swing1Limit = {joint.swing1Limit.limit}");
+            Logger.Debug($"joint.swing2Limit = {joint.swing2Limit.limit}");
+            Logger.Debug($"joint.lowTwistLimit = {joint.lowTwistLimit.limit}");
+            Logger.Debug($"joint.highTwistLimit = {joint.highTwistLimit.limit}");
 
             yield break;
         }
