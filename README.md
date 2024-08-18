@@ -9,5 +9,4 @@ This modification adds **Unity joints** between connected Seatruck vehicle modul
 As modules rotate around joints, it also deforms connection meshes between modules supported by **manually added bone-weights data** to those meshes, remaking into Unity skinned mesh instances of those connectors.
 
 ## To-do
- 1. Seatruck module rotation states transformation from-to saved game;
- 2. Adaptations of docking/undocking to Seatruck docking habitat module;
+ 1. Adaptations of docking/undocking to Seatruck docking habitat module;
