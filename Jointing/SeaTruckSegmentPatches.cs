@@ -240,6 +240,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
 
             // Deparent
             rearSegment.transform.parent = null;
+            LargeWorldStreamer.main.cellManager.RegisterEntity(rearSegment.gameObject);
 
             // Assign center of mass of connecting segments
             var rearSegmentTechType = CraftData.GetTechType(rearSegment.gameObject);

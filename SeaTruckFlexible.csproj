@@ -16,9 +16,9 @@
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
+    <DebugType>portable</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>E:\Program Files %28x86%29\Steam\steamapps\common\SubnauticaZero\QMods\SeaTruckFlexible\</OutputPath>
+    <OutputPath>E:\Program Files %28x86%29\Steam\steamapps\common\SubnauticaZero\BepInEx\plugins\SeaTruckFlexible\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -28,7 +28,7 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>E:\Program Files %28x86%29\Steam\steamapps\common\SubnauticaZero\QMods\SeaTruckFlexible\</OutputPath>
+    <OutputPath>E:\Program Files %28x86%29\Steam\steamapps\common\SubnauticaZero\BepInEx\plugins\SeaTruckFlexible\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -46,6 +46,10 @@
     </Reference>
     <Reference Include="Assembly-CSharp-firstpass">
       <HintPath>E:\Program Files (x86)\Steam\steamapps\common\SubnauticaZero\SubnauticaZero_Data\Managed\publicized_assemblies\Assembly-CSharp-firstpass_publicized.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>E:\Program Files (x86)\Steam\steamapps\common\SubnauticaZero\BepInEx\core\BepInEx.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Newtonsoft.Json">
@@ -80,6 +84,7 @@
     <Compile Include="Jointing\SeaTruckSegmentPatches.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="MainPatcher.cs" />
+    <Compile Include="Plugin.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Utils.cs" />
   </ItemGroup>
@@ -89,9 +94,6 @@
     </None>
     <None Include="Assets\boneweights\seatruck_connector_cabin_geo.bytes">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Include="mod.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
   <ItemGroup />
