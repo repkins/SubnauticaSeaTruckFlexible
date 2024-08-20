@@ -156,6 +156,13 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     var colliderMesh = new Mesh();
                     if (connectorBoxCollider.transform.localScale.x > connectorBoxCollider.transform.localScale.y)
                     {
+                        //   /|\ z
+                        //  1 | 2
+                        //    |
+                        // ---+---> x
+                        //    |
+                        //  0 | 3
+                        //    |
                         colliderMesh.vertices = new Vector3[] {
                             connectorBoxCollider.center + new Vector3(-localExtents.x, localExtents.y, -localExtents.z),
                             connectorBoxCollider.center + new Vector3(-localExtents.x, localExtents.y, localExtents.z),
@@ -165,6 +172,13 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                     }
                     else
                     {
+                        //   /|\ z
+                        //  1 | 2
+                        //    |
+                        // ---+---> y
+                        //    |
+                        //  0 | 3
+                        //    |
                         colliderMesh.vertices = new Vector3[] {
                             connectorBoxCollider.center + new Vector3(0f, -localExtents.y, -localExtents.z),
                             connectorBoxCollider.center + new Vector3(0f, -localExtents.y, localExtents.z),
@@ -172,6 +186,14 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                             connectorBoxCollider.center + new Vector3(0f, localExtents.y, -localExtents.z)
                         };
                     }
+
+                    //   /|\s
+                    //  1---2
+                    //  |  /|
+                    // -| / |->
+                    //  |/  |
+                    //  0---3
+                    //    |
                     colliderMesh.triangles = new[] {
                         0, 1, 2,
                         2, 3, 0
