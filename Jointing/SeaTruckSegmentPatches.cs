@@ -385,7 +385,7 @@ namespace SubnauticaSeaTruckFlexible.Jointing
                 }
             }
 
-            Utils.DrawConnectorColliderLines(__instance);
+            //Utils.DrawConnectorColliderLines(__instance);
         }
     }
 }
